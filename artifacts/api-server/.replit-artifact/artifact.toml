@@ -5,12 +5,12 @@ kind = "api"
   id = "3B4_FFSkEVBkAeYMFRJ2e"
 
   [[services]]
-  localPort = 8080
+  localPort = 8082
   name = "API Server"
   paths = ["/api"]
 
   [services.development]
-  run = "PORT=8080 ENABLE_DEMO_AUTH=true sh -c 'cd /home/runner/workspace && COREPACK_ENABLE_STRICT=0 pnpm install --no-frozen-lockfile 2>&1 | tail -3 && cd /home/runner/workspace/02-artifacts-api-server-db/artifacts/api-server && node ./build.mjs && node --enable-source-maps ./dist/index.mjs'"
+  run = "PORT=8082 ENABLE_DEMO_AUTH=true sh -c 'cd /home/runner/workspace/artifacts/api-server && node ./build.mjs && node --enable-source-maps ./dist/index.mjs'"
 
   [services.production]
 
@@ -21,7 +21,6 @@ kind = "api"
   NODE_ENV = "production"
 
   [services.production.run]
-  # we don't run through pnpm to make startup faster in production
   args = ["node", "--enable-source-maps", "artifacts/api-server/dist/index.mjs"]
 
   [services.production.run.env]
@@ -30,4 +29,3 @@ kind = "api"
 
   [services.production.health.startup]
   path = "/api/healthz"
-  

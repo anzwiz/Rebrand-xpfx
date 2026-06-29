@@ -6,7 +6,7 @@ import {
   useUpdateOwnProfile,
   getGetCurrentUserQueryKey,
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -16,8 +16,206 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
-import { ShieldCheck, Mail, MapPin, Wallet, ArrowRight, CreditCard } from "lucide-react";
+import { ShieldCheck, Mail, MapPin, Wallet, ArrowRight, CreditCard, KeyRound, Loader2, Lock } from "lucide-react";
 import { format } from "date-fns";
+
+async function apiPost(path: string, body: Record<string, string>) {
+  const res = await fetch(`/api${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? "Request failed.");
+  return data;
+}
+
+async function apiPatch(path: string, body: Record<string, string>) {
+  const res = await fetch(`/api${path}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? "Request failed.");
+  return data;
+}
+
+async function apiDelete(path: string, body: Record<string, string>) {
+  const res = await fetch(`/api${path}`, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? "Request failed.");
+  return data;
+}
+
+function SecurityCard() {
+  const { toast } = useToast();
+
+  const [cpForm, setCpForm] = useState({ current: "", next: "", confirm: "" });
+  const [pinForm, setPinForm] = useState({ pin: "", confirm: "", password: "" });
+  const [rmPinPw, setRmPinPw] = useState("");
+  const [cpOpen, setCpOpen] = useState(false);
+  const [pinOpen, setPinOpen] = useState(false);
+
+  const pinStatus = useQuery({
+    queryKey: ["/api/auth/pin/status"],
+    queryFn: async () => {
+      const res = await fetch("/api/auth/pin/status", { credentials: "include" });
+      return res.json() as Promise<{ pinEnabled: boolean }>;
+    },
+  });
+  const qc = useQueryClient();
+
+  const changePw = useMutation({
+    mutationFn: () => apiPatch("/auth/password", { currentPassword: cpForm.current, newPassword: cpForm.next }),
+    onSuccess: () => {
+      toast({ title: "Password changed", description: "Your password has been updated." });
+      setCpForm({ current: "", next: "", confirm: "" });
+      setCpOpen(false);
+    },
+    onError: (e: Error) => toast({ title: "Failed", description: e.message, variant: "destructive" }),
+  });
+
+  const setupPin = useMutation({
+    mutationFn: () => apiPost("/auth/pin/setup", { pin: pinForm.pin, currentPassword: pinForm.password }),
+    onSuccess: () => {
+      toast({ title: "PIN set up", description: "Your login PIN is now active." });
+      setPinForm({ pin: "", confirm: "", password: "" });
+      setPinOpen(false);
+      qc.invalidateQueries({ queryKey: ["/api/auth/pin/status"] });
+    },
+    onError: (e: Error) => toast({ title: "Failed", description: e.message, variant: "destructive" }),
+  });
+
+  const removePin = useMutation({
+    mutationFn: () => apiDelete("/auth/pin", { currentPassword: rmPinPw }),
+    onSuccess: () => {
+      toast({ title: "PIN removed" });
+      setRmPinPw("");
+      qc.invalidateQueries({ queryKey: ["/api/auth/pin/status"] });
+    },
+    onError: (e: Error) => toast({ title: "Failed", description: e.message, variant: "destructive" }),
+  });
+
+  const pinEnabled = pinStatus.data?.pinEnabled ?? false;
+  const cpMismatch = cpForm.confirm.length > 0 && cpForm.next !== cpForm.confirm;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2"><Lock className="h-4 w-4" /> Security</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        <div className="flex justify-between items-center text-sm">
+          <span>Two-Factor Auth (OTP)</span>
+          <Badge variant="outline">Enabled</Badge>
+        </div>
+        <div className="flex justify-between items-center text-sm">
+          <span>Withdrawal Whitelist</span>
+          <Badge variant="outline" className="text-muted-foreground">Disabled</Badge>
+        </div>
+
+        <hr className="border-border" />
+
+        {/* Change Password */}
+        <div>
+          <div className="flex justify-between items-center mb-2">
+            <span className="text-sm font-medium flex items-center gap-2"><KeyRound className="h-3.5 w-3.5" /> Change Password</span>
+            <Button variant="outline" size="sm" onClick={() => setCpOpen((v) => !v)}>
+              {cpOpen ? "Cancel" : "Change"}
+            </Button>
+          </div>
+          {cpOpen && (
+            <div className="space-y-3 pt-1">
+              <div className="space-y-1">
+                <Label className="text-xs">Current password</Label>
+                <Input type="password" value={cpForm.current} onChange={(e) => setCpForm((f) => ({ ...f, current: e.target.value }))} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">New password</Label>
+                <Input type="password" value={cpForm.next} onChange={(e) => setCpForm((f) => ({ ...f, next: e.target.value }))} minLength={8} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Confirm new password</Label>
+                <Input type="password" value={cpForm.confirm} onChange={(e) => setCpForm((f) => ({ ...f, confirm: e.target.value }))} className={cpMismatch ? "border-destructive" : ""} />
+                {cpMismatch && <p className="text-destructive text-xs">Passwords don't match.</p>}
+              </div>
+              <Button size="sm" className="w-full" disabled={changePw.isPending || cpMismatch || !cpForm.current || !cpForm.next || !cpForm.confirm} onClick={() => changePw.mutate()}>
+                {changePw.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : null}
+                Update password
+              </Button>
+            </div>
+          )}
+        </div>
+
+        <hr className="border-border" />
+
+        {/* Login PIN */}
+        <div>
+          <div className="flex justify-between items-center mb-2">
+            <div>
+              <span className="text-sm font-medium flex items-center gap-2">
+                <ShieldCheck className="h-3.5 w-3.5" /> Login PIN
+              </span>
+              <p className="text-xs text-muted-foreground mt-0.5">4–8 digit numeric PIN for extra security</p>
+            </div>
+            <div className="flex gap-2 items-center">
+              {pinStatus.isLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : (
+                <Badge variant="outline" className={pinEnabled ? "text-green-600 border-green-600" : "text-muted-foreground"}>
+                  {pinEnabled ? "Active" : "Not set"}
+                </Badge>
+              )}
+              <Button variant="outline" size="sm" onClick={() => setPinOpen((v) => !v)}>
+                {pinOpen ? "Cancel" : pinEnabled ? "Manage" : "Set up"}
+              </Button>
+            </div>
+          </div>
+          {pinOpen && (
+            <div className="space-y-3 pt-1">
+              {!pinEnabled ? (
+                <>
+                  <div className="space-y-1">
+                    <Label className="text-xs">New PIN (4–8 digits)</Label>
+                    <Input type="password" inputMode="numeric" pattern="\d{4,8}" maxLength={8} value={pinForm.pin} onChange={(e) => setPinForm((f) => ({ ...f, pin: e.target.value.replace(/\D/g, "") }))} placeholder="e.g. 1234" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Confirm PIN</Label>
+                    <Input type="password" inputMode="numeric" maxLength={8} value={pinForm.confirm} onChange={(e) => setPinForm((f) => ({ ...f, confirm: e.target.value.replace(/\D/g, "") }))} />
+                    {pinForm.confirm.length > 0 && pinForm.pin !== pinForm.confirm && <p className="text-destructive text-xs">PINs don't match.</p>}
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Current password (required)</Label>
+                    <Input type="password" value={pinForm.password} onChange={(e) => setPinForm((f) => ({ ...f, password: e.target.value }))} />
+                  </div>
+                  <Button size="sm" className="w-full" disabled={setupPin.isPending || pinForm.pin.length < 4 || pinForm.pin !== pinForm.confirm || !pinForm.password} onClick={() => setupPin.mutate()}>
+                    {setupPin.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : null}
+                    Activate PIN
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm text-muted-foreground">Enter your password to remove the PIN.</p>
+                  <Input type="password" placeholder="Current password" value={rmPinPw} onChange={(e) => setRmPinPw(e.target.value)} />
+                  <Button variant="destructive" size="sm" className="w-full" disabled={removePin.isPending || !rmPinPw} onClick={() => removePin.mutate()}>
+                    {removePin.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : null}
+                    Remove PIN
+                  </Button>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 export function Settings() {
   const { data: user, isLoading: isLoadingUser } = useGetCurrentUser();
@@ -239,21 +437,7 @@ export function Settings() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Security</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex justify-between items-center text-sm">
-                <span>Two-Factor Auth</span>
-                <Badge variant="outline">Enabled</Badge>
-              </div>
-              <div className="flex justify-between items-center text-sm">
-                <span>Withdrawal Whitelist</span>
-                <Badge variant="outline" className="text-muted-foreground">Disabled</Badge>
-              </div>
-            </CardContent>
-          </Card>
+          <SecurityCard />
         </div>
       </div>
     </div>

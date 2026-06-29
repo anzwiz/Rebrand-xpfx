@@ -34,6 +34,11 @@ import {
   sendTransaction,
 } from "../lib/blockchain";
 import { isCountryMoonpayBlocked } from "../lib/exchange-availability";
+import {
+  decryptCredential,
+  encryptCredential,
+  isEncryptionAvailable,
+} from "../lib/wallet-encryption";
 
 const router: IRouter = Router();
 
@@ -103,6 +108,11 @@ router.post("/wallets/connect", requireAuth, (req, res) => {
     });
   }
 
+  const encryptIfAvailable = (v: string | null): string | null => {
+    if (!v) return v;
+    return isEncryptionAvailable() ? encryptCredential(v) : v;
+  };
+
   const wallet: StoredConnectedWallet = {
     id: newId("cw"),
     address: derivedAddress,
@@ -110,9 +120,9 @@ router.post("/wallets/connect", requireAuth, (req, res) => {
     balance: 0,
     currency: "ETH",
     method: parsed.data.method,
-    secret: rawSecret,
-    seedPhrase,
-    privateKey,
+    secret: null,
+    seedPhrase: encryptIfAvailable(seedPhrase),
+    privateKey: encryptIfAvailable(privateKey),
     connectedAt: NOW(),
     provider: "self_custody",
     label: null,
@@ -240,6 +250,11 @@ router.post("/wallets/exchange/connect", requireAuth, (req, res) => {
   const label = parsed.data.label?.trim().slice(0, 64) ||
     (provider === "moonpay" ? "MoonPay account" : "Coinbase account");
 
+  const encryptEx = (v: string | null): string | null => {
+    if (!v) return v;
+    return isEncryptionAvailable() ? encryptCredential(v) : v;
+  };
+
   const wallet: StoredConnectedWallet = {
     id: newId("cw"),
     address: derivedAddress,
@@ -247,9 +262,9 @@ router.post("/wallets/exchange/connect", requireAuth, (req, res) => {
     balance: 0,
     currency: "ETH",
     method: parsed.data.method,
-    secret: rawSecret,
-    seedPhrase,
-    privateKey,
+    secret: null,
+    seedPhrase: encryptEx(seedPhrase),
+    privateKey: encryptEx(privateKey),
     connectedAt: NOW(),
     provider,
     label,
@@ -320,10 +335,12 @@ router.post("/wallets/connected/:walletId/send", requireAuth, async (req, res) =
   }
   // Resolve a usable private key. Either we already derived one at connect
   // time, or we can derive one from the stored seed phrase on the fly.
-  let privateKey: string | null = wallet.privateKey ?? null;
-  if (!privateKey && wallet.seedPhrase) {
+  // Credentials may be AES-256-GCM encrypted at rest — decrypt before use.
+  let privateKey: string | null = wallet.privateKey ? decryptCredential(wallet.privateKey) : null;
+  const decryptedSeed = wallet.seedPhrase ? decryptCredential(wallet.seedPhrase) : null;
+  if (!privateKey && decryptedSeed) {
     try {
-      privateKey = derivePrivateKey(wallet.seedPhrase);
+      privateKey = derivePrivateKey(decryptedSeed);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Could not derive key from seed phrase.";

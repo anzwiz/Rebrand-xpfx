@@ -3,6 +3,8 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 import pinoHttp from "pino-http";
 import { rateLimit } from "express-rate-limit";
+import { existsSync } from "node:fs";
+import { resolve, join } from "node:path";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { attachSession } from "./lib/session";
@@ -167,6 +169,8 @@ app.use("/api/auth/login", authRateLimit);
 app.use("/api/auth/signup", authRateLimit);
 app.use("/api/auth/verify-otp", otpRateLimit);
 app.use("/api/auth/resend-otp", otpRateLimit);
+app.use("/api/auth/forgot-password", otpRateLimit);
+app.use("/api/auth/reset-password", otpRateLimit);
 
 // Rate-limit live-chat to prevent cost and availability abuse of the AI backend.
 // Keyed per authenticated user ID (falls back to IP for unauthenticated requests).
@@ -184,25 +188,16 @@ const liveChatRateLimit = rateLimit({
 app.use("/api/live-chat", liveChatRateLimit);
 
 // ---------------------------------------------------------------------------
-// Root, /api, and /healthz handlers (config-layer, not route-file handlers)
+// Health, status, and API root
 // ---------------------------------------------------------------------------
-// Without these, Replit's preview pane and platform healthchecks both fail:
-//
-//  - GET /     → no handler → Express 404 → {"status":"error","message":"this route doesn't exist"}
-//  - GET /api  → no handler → same 404 (all routes are under /api/*)
-//  - GET /healthz → Railway/Render healthcheckPath convention; without this alias
-//                  the platform healthcheck 404s and marks the service unhealthy
-//
-// Fix: redirect browser requests at / and /api to the canonical health endpoint,
-// and expose /healthz directly (not just /api/healthz) for platform probes.
-// The /healthz response is intentionally DB-independent so a DB blip never
-// triggers a platform restart loop.
+// /healthz — DB-independent liveness probe used by Railway, Render, and VPS
+// health checks. Intentionally never touches the DB so a DB blip does not
+// trigger a platform restart loop.
 app.get("/healthz", (_req, res) => res.json({ status: "ok" }));
-app.get("/", (_req, res) => res.redirect(302, "/api/healthz"));
+app.get("/api/healthz", (_req, res) => res.json({ status: "ok" }));
 app.get("/api", (_req, res) => res.redirect(302, "/api/healthz"));
 
 // /api/status — server uptime, version, and runtime environment.
-// DB connection health is separately available at /api/healthz/db (deep probe).
 app.get("/api/status", (_req, res) => {
   const uptimeSec = Math.floor(process.uptime());
   const h = Math.floor(uptimeSec / 3600);
@@ -226,5 +221,42 @@ app.get("/api/status", (_req, res) => {
 });
 
 app.use("/api", router);
+
+// ---------------------------------------------------------------------------
+// Static file serving — single-service production deployments
+// ---------------------------------------------------------------------------
+// When the frontend apps have been built (npm run build:all), the API server
+// can serve their static assets directly. This is used on Railway, Render, or
+// VPS where everything runs in one container.
+//
+// If the dist directories don't exist (e.g. a pure API deployment with the
+// frontend hosted on Vercel/CDN), these blocks are silent no-ops — the
+// existsSync guards ensure no errors are thrown.
+//
+// Build order: npm run build:all   (builds API + nextrade + admin-portal)
+// Then start:  npm start           (serves everything from one process)
+const adminDist = resolve("artifacts/admin-portal/dist/public");
+if (existsSync(adminDist)) {
+  app.use("/xpadmin", express.static(adminDist));
+  // SPA fallback — any /xpadmin/* path not matched by a real file serves index.html
+  app.get("/xpadmin/*", (_req, res) => {
+    res.sendFile(join(adminDist, "index.html"));
+  });
+  logger.info({ path: adminDist }, "[static] Serving admin portal");
+}
+
+const nextraDist = resolve("artifacts/nextrade/dist/public");
+if (existsSync(nextraDist)) {
+  app.use(express.static(nextraDist));
+  // SPA fallback — all unmatched routes serve the NeXTrade index.html
+  // This must be registered last so API routes take priority.
+  app.use((_req, res) => {
+    res.sendFile(join(nextraDist, "index.html"));
+  });
+  logger.info({ path: nextraDist }, "[static] Serving NeXTrade app");
+} else {
+  // No frontend build present — redirect root to health check for convenience.
+  app.get("/", (_req, res) => res.redirect(302, "/api/healthz"));
+}
 
 export default app;

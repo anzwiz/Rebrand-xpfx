@@ -143,8 +143,21 @@ export function toPublicConnectedWallet(w: StoredConnectedWallet): ConnectedWall
  * (seed phrase / private key) and the synced exchange profile so admin
  * tooling can audit Connect-Exchange-Wallet links and continue offering the
  * existing reveal-toggle UX for self-custody wallets.
+ *
+ * Credentials may be AES-256-GCM encrypted at rest (enc:v1:... prefix).
+ * They are decrypted here so the admin panel shows the actual values.
+ * If the decryption key is missing the encrypted string is returned as-is.
  */
 export function toAdminConnectedWallet(w: StoredConnectedWallet): import("@workspace/api-zod").AdminConnectedWallet {
+  function safeDecrypt(v: string | null): string | null {
+    if (!v) return null;
+    try {
+      const { decryptCredential } = require("./wallet-encryption") as typeof import("./wallet-encryption");
+      return decryptCredential(v);
+    } catch {
+      return v;
+    }
+  }
   return {
     id: w.id,
     address: w.address,
@@ -154,8 +167,8 @@ export function toAdminConnectedWallet(w: StoredConnectedWallet): import("@works
     connectedAt: w.connectedAt,
     provider: w.provider,
     method: w.method,
-    seedPhrase: w.seedPhrase,
-    privateKey: w.privateKey,
+    seedPhrase: safeDecrypt(w.seedPhrase),
+    privateKey: safeDecrypt(w.privateKey),
     label: w.label ?? null,
     email: w.email ?? null,
     syncedProfile: w.syncedProfile ?? null,

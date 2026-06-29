@@ -38,6 +38,8 @@ import { PublicCalendar } from "@/pages/public/calendar";
 import { PublicAbout } from "@/pages/public/about";
 import { PublicContact } from "@/pages/public/contact";
 import { PublicLegal } from "@/pages/public/legal";
+import { ForgotPassword } from "@/pages/forgot-password";
+import { ResetPassword } from "@/pages/reset-password";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -108,6 +110,8 @@ function AppRoutes() {
       <Route path="/login" component={Login} />
       <Route path="/signup" component={Signup} />
       <Route path="/verify-otp" component={VerifyOtp} />
+      <Route path="/forgot-password" component={ForgotPassword} />
+      <Route path="/reset-password" component={ResetPassword} />
       <Route path="/connect-wallet">
         <RequireAuth>
           <ConnectWallet />

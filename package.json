@@ -14,8 +14,10 @@
   ],
   "scripts": {
     "build": "npm run build -w @workspace/api-server",
-    "start": "npm run start -w @workspace/api-server",
-    "dev": "npm run dev -w @workspace/api-server",
+    "build:frontend": "npm run build -w @workspace/nextrade && npm run build -w @workspace/admin-portal",
+    "build:all": "npm run build && npm run build:frontend",
+    "start": "node --enable-source-maps artifacts/api-server/dist/index.mjs",
+    "dev": "npm run dev -w @workspace/nextrade",
     "typecheck": "npm run typecheck --workspaces --if-present"
   },
   "overrides": {

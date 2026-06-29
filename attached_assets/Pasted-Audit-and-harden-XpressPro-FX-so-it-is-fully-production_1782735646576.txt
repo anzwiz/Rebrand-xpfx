@@ -1,0 +1,30 @@
+Audit and harden XpressPro FX so it is fully production-ready and deployable across multiple hosting platforms (VPS, Railway, Render, Vercel) — not just Replit. Do not touch wallet/private key storage in this task; that's handled separately.
+
+**1. Platform-agnostic build & startup**
+- Remove any Replit-specific assumptions (hardcoded ports tied to Replit's proxy, Replit-only env vars, `.replit`-only workflow logic) from the actual application code — `.replit` config can stay for local dev, but the app itself must run identically via plain `npm run build && npm start` on any Node host.
+- Confirm the server reads `PORT` from environment variables (not hardcoded) so it binds correctly on Railway/Render/VPS, which assign ports dynamically.
+- Confirm the frontend build outputs static assets the backend can serve directly in production (no dev-only Vite proxy dependency at runtime).
+- Provide a single `Procfile` or `start` script that works the same way across all target platforms.
+
+**2. Workflow / process stability — verify, don't assume**
+- Stop and restart every workflow (API server, frontend, any artifact/preview workflows) one at a time, not in parallel, and confirm each one reaches a stable running state with no port collisions before moving to the next.
+- Check server logs for unhandled promise rejections, unhandled exceptions, or silent crashes on startup.
+- Confirm the existing graceful shutdown, retry logic, and health endpoints actually respond correctly (`curl` or equivalent check against each health endpoint) — don't just confirm they exist in code.
+- Confirm `hydrateFromDb()` (or equivalent state restoration) runs on every cold start, not just the first one.
+- Run the full build process from a clean state (delete `dist`/`node_modules`, reinstall, rebuild) to catch any dependency or build-script issue that cached state was hiding.
+
+**3. Environment & secrets**
+- List every environment variable the app requires to run (DB, session secret, RPC providers, email service, MoonPay, Sentry, admin credentials, etc.) in a `.env.example` file with placeholder values and comments — no real secrets committed.
+- Confirm the app fails fast with a clear error message if a required env var is missing, rather than crashing obscurely or running in a broken half-state.
+
+**4. Database & migrations**
+- Confirm Drizzle migrations run cleanly against a fresh empty Postgres database with no manual intervention.
+- Confirm there's a documented migration command for deploying schema changes on any new host.
+
+**5. Repo cleanliness**
+- Re-confirm no stray batch-upload folders, duplicate configs, or leftover artifact directories remain at the repo root.
+- Confirm `.gitignore` excludes `node_modules`, `dist`, `.env`, and any local build artifacts.
+
+**6. Final verification**
+- After all fixes, do a full cold-start test: fresh clone equivalent, install, build, start — frontend loads, API responds, admin portal loads, and no errors appear in logs for at least 2 minutes of idle running.
+- Report back: which platforms you tested config compatibility for, any remaining platform-specific blockers, and a final pass/fail per item above.

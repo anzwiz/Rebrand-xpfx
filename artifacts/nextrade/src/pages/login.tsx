@@ -131,14 +131,18 @@ export function Login() {
               Try Demo Account
             </Button>
           </CardContent>
-          <CardFooter className="flex flex-col space-y-4">
+          <CardFooter className="flex flex-col space-y-3">
+            <div className="text-sm text-center text-muted-foreground w-full">
+              <Link href="/forgot-password" className="text-primary hover:underline">
+                Forgot your password?
+              </Link>
+            </div>
             <div className="text-sm text-center text-muted-foreground w-full">
               Don't have an account?{" "}
               <Link href="/signup" className="text-primary hover:underline">
                 Sign up
               </Link>
             </div>
-            
           </CardFooter>
         </Card>
       </div>

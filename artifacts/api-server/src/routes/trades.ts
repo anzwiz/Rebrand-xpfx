@@ -6,6 +6,7 @@ import { getUserData, logActivity } from "../lib/store";
 import { requireAuth } from "../lib/session";
 import { enforceGasFee } from "../lib/gas-fee-gate";
 import { notifyUser } from "../lib/notify";
+import { isFirstTrade, triggerReferralReward } from "../lib/referral-rewards";
 
 const router: IRouter = Router();
 
@@ -50,6 +51,13 @@ router.post("/trades/:tradeId/release", requireAuth, (req, res) => {
   if (main) main.balance = Math.round((main.balance + trade.profit) * 100) / 100;
   const released = trade.profit;
   trade.profit = 0;
+
+  // Trigger referral reward on first completed trade release (idempotent — fires only once per user).
+  const completedReleased = data.trades.filter((t) => t.status === "completed" && t.profit === 0).length;
+  if (isFirstTrade(req.userId!, completedReleased - 1)) {
+    triggerReferralReward(req.userId!);
+  }
+
   logActivity({
     actorId: req.userId!,
     actorName: req.storedUser!.user.fullName,
