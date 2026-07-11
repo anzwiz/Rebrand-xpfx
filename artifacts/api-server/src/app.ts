@@ -8,6 +8,7 @@ import rateLimit from 'express-rate-limit';
 import pinoHttp from 'pino-http';
 import fs from 'fs';
 import path from 'path';
+import client from 'prom-client';
 
 const app = express();
 
@@ -57,6 +58,19 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-CSRF-Token']
 }));
+
+// ─── METRICS (Prometheus) ───────────────────────────────────────────────────
+const collectDefaultMetrics = client.collectDefaultMetrics;
+collectDefaultMetrics({ timeout: 5000 });
+
+app.get('/metrics', async (_req: Request, res: Response) => {
+  try {
+    res.set('Content-Type', client.register.contentType);
+    res.end(await client.register.metrics());
+  } catch (err) {
+    res.status(500).send('Failed to collect metrics');
+  }
+});
 
 // ─── COMPRESSION ──────────────────────────────────────────────────────────────
 app.use(compression());
