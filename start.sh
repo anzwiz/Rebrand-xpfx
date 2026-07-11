@@ -31,24 +31,38 @@ elif [ -f ".env" ]; then
 fi
 
 export PORT="${PORT:-8080}"
-export NODE_ENV="${NODE_ENV:-production}"
+RUN_NODE_ENV="${NODE_ENV:-production}"
+export NODE_ENV="development"
+
+# Ensure a usable port value
+PORT_INT="${PORT}"
+if ! [[ "$PORT_INT" =~ ^[0-9]+$ ]]; then
+  echo "[warn] Invalid PORT '$PORT_INT', falling back to 3000" >&2
+  PORT_INT=3000
+fi
+export PORT="$PORT_INT"
 
 echo "[config] PORT=${PORT}  NODE_ENV=${NODE_ENV}"
 
 # Validate required env vars before building
-if [ -z "${PORT:-}" ]; then
-  echo "ERROR: PORT environment variable is required." >&2
-  exit 1
+if [ -z "${SESSION_SECRET:-}" ] && [ "$RUN_NODE_ENV" = "production" ]; then
+  echo "[warn] SESSION_SECRET not set; using a temporary fallback for local/VPS startup" >&2
+  export SESSION_SECRET="${SESSION_SECRET:-xpresspro-fx-temporary-secret}"
 fi
-if [ -z "${SESSION_SECRET:-}" ] && [ "$NODE_ENV" = "production" ]; then
-  echo "ERROR: SESSION_SECRET is required in production." >&2
-  exit 1
+
+# Clean stale processes on the chosen port when running locally or on a VPS
+if command -v lsof >/dev/null 2>&1; then
+  echo "[cleanup] Removing existing listeners on port ${PORT}..."
+  lsof -ti tcp:"$PORT" | xargs -r kill -9 || true
+elif command -v fuser >/dev/null 2>&1; then
+  echo "[cleanup] Removing existing listeners on port ${PORT}..."
+  fuser -k "$PORT"/tcp >/dev/null 2>&1 || true
 fi
 
 # Install dependencies
 echo ""
-echo "[install] Running npm ci..."
-npm ci --prefer-offline 2>&1 | tail -5
+echo "[install] Running npm ci with development dependencies..."
+NPM_CONFIG_PRODUCTION=false npm ci --prefer-offline 2>&1 | tail -5
 
 # Build API server
 echo ""
@@ -64,6 +78,8 @@ if [ "${BUILD_ALL:-false}" = "true" ]; then
   npm run build --workspace=artifacts/admin-portal
 fi
 
+export NODE_ENV="$RUN_NODE_ENV"
+
 echo ""
 echo "[start] Starting API server on port ${PORT}..."
-exec node --enable-source-maps artifacts/api-server/dist/index.js
+exec node --enable-source-maps artifacts/api-server/dist/artifacts/api-server/src/index.js

@@ -1,0 +1,18 @@
+[Unit]
+Description=XpressPro FX production server
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/workspaces/Rebranded-xpfx
+Environment=NODE_ENV=production
+Environment=PORT=8080
+EnvironmentFile=-/etc/xpressfx.env
+ExecStart=/bin/bash /workspaces/Rebranded-xpfx/start.sh
+Restart=always
+RestartSec=10
+StandardOutput=append:/var/log/xpresspro.log
+StandardError=append:/var/log/xpresspro.err.log
+
+[Install]
+WantedBy=multi-user.target

@@ -3,17 +3,22 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 import http from 'http';
-import type { PrismaClient as PrismaClientType } from '@prisma/client';
 import app from './app';
 
-const PORT = Number(process.env.PORT || 3000);
+type PrismaClientType = {
+  $connect: () => Promise<void>;
+  $disconnect: () => Promise<void>;
+};
+
+const DEFAULT_PORT = 3000;
+const PORT = Number(process.env.PORT || DEFAULT_PORT);
 const server = http.createServer(app);
 
 let prisma: PrismaClientType | null = null;
 
 function normalizePort(value: string | number | undefined) {
   const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 3000;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_PORT;
 }
 
 async function initDatabase() {
@@ -67,6 +72,7 @@ process.on('SIGINT', async () => {
 server.on('error', (error: NodeJS.ErrnoException) => {
   if (error.code === 'EADDRINUSE') {
     console.error(`[SERVER] Port ${PORT} is already in use. Please stop the existing process or change PORT.`);
+    console.error('[SERVER] If this is a local or VPS restart, wait a few seconds and try again.');
   } else {
     console.error('[SERVER] Failed to bind:', error);
   }
