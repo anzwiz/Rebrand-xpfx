@@ -259,6 +259,13 @@ app.use('/api/*', (req: Request, res: Response, next: NextFunction) => {
 // ─── API ROUTES ───────────────────────────────────────────────────────────────
 app.use('/api', apiRoutes);
 
+// Ensure any unmatched API request (all methods) returns a JSON 404 instead
+// of Express's default HTML error page. This makes errors consistent for
+// frontend clients and helps debugging missing routes like POST /api/auth/signup.
+app.use('/api', (_req, res) => {
+  return res.status(404).json({ success: false, message: 'Route not found.' });
+});
+
 // ─── SPA FALLBACK ─────────────────────────────────────────────────────────────
 app.get('*', (req: Request, res: Response) => {
   if (req.path.startsWith('/api/')) {
