@@ -10,3 +10,4 @@
 - [Referral reward engine](referral-rewards.md) — fires on first completed-trade release in trades.ts; engine in api-server/src/lib/referral-rewards.ts; rewardedReferrals Set guards idempotency; configurable via REFERRAL_REWARD_USD env (default $500).
 - [API server build pipeline](api-server-build-pipeline.md) — build.mjs (esbuild → flat dist/index.mjs) is authoritative, not tsc's nested dist/artifacts/... output; root start scripts/PM2 config must target dist/index.mjs.
 - [cookie-parser signed secret](cookie-parser-signed-secret.md) — cookieParser() with no secret 500s any route touching signed cookies; pass the session secret at init.
+- [Prisma CLI/client version pin](prisma-cli-client-version-pin.md) — root prisma CLI pin must match workspace @prisma/client version or the query engine panics at boot, not at install.

@@ -42,10 +42,13 @@ SECTION 1 — STARTUP & RUNTIME CRASH PROTECTION
 
 2. In artifacts/api-server/package.json confirm:
    "scripts": {
-     "build": "tsc",
-     "start": "node dist/index.js",
-     "start:prod": "NODE_ENV=production node dist/index.js"
+     "build": "node ./build.mjs",
+     "typecheck": "tsc --noEmit",
+     "start": "node --enable-source-maps dist/index.mjs",
+     "start:prod": "NODE_ENV=production node --enable-source-maps dist/index.mjs"
    }
+   (build.mjs is an esbuild bundle step producing a flat dist/index.mjs;
+   plain tsc alone is NOT the build — it only type-checks.)
 
 3. In artifacts/api-server/tsconfig.json confirm:
    "outDir": "./dist",
@@ -63,7 +66,7 @@ SECTION 2 — RAILWAY DEPLOYMENT CONFIG
        "buildCommand": "npm install && npm run build --workspace=artifacts/api-server"
      },
      "deploy": {
-       "startCommand": "node artifacts/api-server/dist/index.js",
+       "startCommand": "node artifacts/api-server/dist/index.mjs",
        "healthcheckPath": "/healthz",
        "healthcheckTimeout": 60,
        "restartPolicyType": "ON_FAILURE",
@@ -79,7 +82,7 @@ SECTION 3 — VPS PRODUCTION DEPLOYMENT CONFIG
    module.exports = {
      apps: [{
        name: 'xpresspro-api',
-       script: './dist/index.js',
+       script: './dist/index.mjs',
        instances: 'max',
        exec_mode: 'cluster',
        env_production: {
@@ -366,7 +369,7 @@ DEFINITION OF DONE — DO NOT STOP UNTIL ALL PASS
 ✅ npm audit --audit-level=high  → zero high/critical vulnerabilities
 ✅ npm test                      → all tests pass
 ✅ npm run build (all workspaces) → completes with no errors
-✅ node dist/index.js             → starts without crashing
+✅ node dist/index.mjs            → starts without crashing
 ✅ GET /healthz                   → returns { "status": "ok" }
 ✅ railway.json                   → valid and correct
 ✅ ecosystem.config.js            → valid PM2 cluster config

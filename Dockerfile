@@ -34,4 +34,4 @@ COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/package-lock.json ./package-lock.json
 COPY --from=build /app/.npmrc ./.npmrc
 EXPOSE 3000
-CMD ["node", "--enable-source-maps", "artifacts/api-server/dist/artifacts/api-server/src/index.js"]
+CMD ["node", "--enable-source-maps", "artifacts/api-server/dist/index.mjs"]
